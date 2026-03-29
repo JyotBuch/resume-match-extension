@@ -1,0 +1,9 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+
+# No build artifacts — this is a pure vanilla extension

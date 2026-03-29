@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Resume Match</title>
+  <style>
+    /* ── Design tokens ───────────────────────────────────── */
+    :root {
+      --bg:      #f8fafc;
+      --surface: #ffffff;
+      --border:  #e2e8f0;
+      --text:    #0f172a;
+      --muted:   #64748b;
+      --accent:  #6366f1;
+      --success: #10b981;
+      --warning: #f59e0b;
+      --danger:  #ef4444;
+      --radius:  10px;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg:      #0f172a;
+        --surface: #1e293b;
+        --border:  #334155;
+        --text:    #f1f5f9;
+        --muted:   #94a3b8;
+        --accent:  #818cf8;
+        --success: #34d399;
+        --warning: #fbbf24;
+        --danger:  #f87171;
+      }
+    }
+
+    /* ── Reset ───────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      width: 360px;
+      max-height: 580px;
+      overflow-y: auto;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-size: 13px;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+      scrollbar-width: thin;
+    }
+
+    /* ── Top bar ─────────────────────────────────────────── */
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 14px 10px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+
+    .topbar-name {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+    }
+
+    .settings-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: var(--muted);
+      padding: 2px;
+      display: flex;
+      align-items: center;
+      border-radius: 4px;
+      transition: color 0.15s, background 0.15s;
+    }
+    .settings-btn:hover { color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
+    .settings-btn svg { width: 16px; height: 16px; }
+
+    /* ── Shared padding ──────────────────────────────────── */
+    .body { padding: 16px 14px; }
+
+    /* ── States ─────────────────────────────────────────── */
+    .state { display: none; }
+    .state.active { display: block; }
+
+    /* ── Setup prompt ────────────────────────────────────── */
+    .setup-prompt {
+      text-align: center;
+      padding: 32px 16px;
+    }
+    .setup-prompt .icon { font-size: 32px; margin-bottom: 12px; }
+    .setup-prompt h2 { font-size: 15px; margin-bottom: 6px; }
+    .setup-prompt p { color: var(--muted); font-size: 12px; margin-bottom: 20px; }
+
+    /* ── Buttons ─────────────────────────────────────────── */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 600;
+      padding: 10px 18px;
+      transition: background 0.15s, transform 0.1s, opacity 0.15s;
+      width: 100%;
+    }
+    .btn:active { transform: scale(0.98); }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-primary:hover { opacity: 0.9; }
+    .btn-secondary {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text);
+      margin-top: 8px;
+    }
+    .btn-secondary:hover { border-color: var(--accent); color: var(--accent); }
+    .btn-danger { background: var(--danger); color: #fff; }
+    .btn-danger:hover { opacity: 0.9; }
+
+    .hint-text {
+      text-align: center;
+      color: var(--muted);
+      font-size: 11px;
+      margin-top: 8px;
+    }
+
+    /* ── Loading ─────────────────────────────────────────── */
+    .loading-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 14px;
+      padding: 48px 16px;
+    }
+
+    .spinner {
+      width: 36px;
+      height: 36px;
+      border: 3px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .loading-label {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    /* ── Score ring ─────────────────────────────────────── */
+    .score-section {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 20px 0 16px;
+    }
+
+    .score-ring-wrap { position: relative; width: 110px; height: 110px; }
+
+    .score-ring-wrap svg { transform: rotate(-90deg); }
+
+    .score-track { fill: none; stroke: var(--border); stroke-width: 8; }
+
+    .score-fill {
+      fill: none;
+      stroke-width: 8;
+      stroke-linecap: round;
+      transition: stroke-dashoffset 0.9s cubic-bezier(0.4, 0, 0.2, 1),
+                  stroke 0.4s;
+    }
+
+    .score-label {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 0;
+    }
+
+    .score-number {
+      font-size: 26px;
+      font-weight: 800;
+      letter-spacing: -1px;
+      line-height: 1;
+    }
+
+    .score-pct {
+      font-size: 11px;
+      color: var(--muted);
+      font-weight: 500;
+    }
+
+    .verdict {
+      margin-top: 12px;
+      text-align: center;
+      font-size: 13px;
+      color: var(--text);
+      line-height: 1.4;
+      max-width: 300px;
+      font-style: italic;
+    }
+
+    /* ── Skills columns ─────────────────────────────────── */
+    .skills-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-top: 16px;
+    }
+
+    .skills-col h3 {
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+
+    .chips { display: flex; flex-wrap: wrap; gap: 5px; }
+
+    .chip {
+      font-size: 11px;
+      font-weight: 500;
+      padding: 3px 8px;
+      border-radius: 99px;
+      line-height: 1.4;
+    }
+
+    .chip-success { background: color-mix(in srgb, var(--success) 15%, transparent); color: var(--success); }
+    .chip-danger  { background: color-mix(in srgb, var(--danger)  15%, transparent); color: var(--danger); }
+    .chip-accent  { background: color-mix(in srgb, var(--accent)  15%, transparent); color: var(--accent); }
+
+    /* ── Divider ─────────────────────────────────────────── */
+    .divider {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 16px 0;
+    }
+
+    /* ── Deep analysis ───────────────────────────────────── */
+    .section-title {
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      margin-bottom: 10px;
+    }
+
+    .rewrite-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 12px;
+      margin-bottom: 8px;
+    }
+
+    .rewrite-label {
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 4px;
+    }
+
+    .rewrite-original { color: var(--muted); }
+    .rewrite-improved { color: var(--success); margin-top: 8px; }
+
+    .rewrite-text {
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
+    .arrow { color: var(--border); margin: 4px 0; font-size: 11px; }
+
+    .feedback-para {
+      font-size: 12px;
+      line-height: 1.7;
+      color: var(--text);
+    }
+
+    /* ── Disclaimer ──────────────────────────────────────── */
+    .disclaimer {
+      text-align: center;
+      font-size: 10px;
+      color: var(--muted);
+      margin-top: 16px;
+      padding-bottom: 4px;
+    }
+
+    /* ── Error ───────────────────────────────────────────── */
+    .error-box {
+      background: color-mix(in srgb, var(--danger) 10%, transparent);
+      border: 1px solid color-mix(in srgb, var(--danger) 30%, transparent);
+      border-radius: 8px;
+      color: var(--danger);
+      font-size: 12px;
+      line-height: 1.5;
+      padding: 12px 14px;
+      margin-bottom: 14px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top bar -->
+  <div class="topbar">
+    <span class="topbar-name">Resume Match</span>
+    <button class="settings-btn" id="settingsBtn" title="Open settings">
+      <svg viewBox="0 0 20 20" fill="currentColor">
+        <path fill-rule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clip-rule="evenodd"/>
+      </svg>
+    </button>
+  </div>
+
+  <!-- ── SETUP state ── -->
+  <div class="state active body" id="state-setup">
+    <div class="setup-prompt">
+      <div class="icon">📄</div>
+      <h2>Set up your resume first</h2>
+      <p>Paste your resume and Groq API key in settings to get started.</p>
+      <button class="btn btn-primary" id="goSetupBtn">Open settings</button>
+    </div>
+  </div>
+
+  <!-- ── DEFAULT state ── -->
+  <div class="state body" id="state-default">
+    <button class="btn btn-primary" id="analyzeBtn">
+      <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor">
+        <path d="M9 4.804A7.968 7.968 0 005.5 4c-1.255 0-2.443.29-3.5.804v10A7.969 7.969 0 015.5 14c1.669 0 3.218.51 4.5 1.385A7.962 7.962 0 0114.5 14c1.255 0 2.443.29 3.5.804v-10A7.968 7.968 0 0014.5 4c-1.255 0-2.443.29-3.5.804V12a1 1 0 11-2 0V4.804z"/>
+      </svg>
+      Analyze this job
+    </button>
+    <p class="hint-text">Scores the job on your current tab</p>
+  </div>
+
+  <!-- ── LOADING state ── -->
+  <div class="state" id="state-loading">
+    <div class="loading-state">
+      <div class="spinner"></div>
+      <span class="loading-label" id="loadingLabel">Analyzing…</span>
+    </div>
+  </div>
+
+  <!-- ── RESULT state ── -->
+  <div class="state body" id="state-result">
+
+    <!-- Score ring -->
+    <div class="score-section">
+      <div class="score-ring-wrap">
+        <svg width="110" height="110" viewBox="0 0 110 110">
+          <circle class="score-track" cx="55" cy="55" r="46"/>
+          <circle class="score-fill" id="scoreFill" cx="55" cy="55" r="46"
+                  stroke-dasharray="289 289"
+                  stroke-dashoffset="289"/>
+        </svg>
+        <div class="score-label">
+          <span class="score-number" id="scoreNumber">--</span>
+          <span class="score-pct">match</span>
+        </div>
+      </div>
+      <p class="verdict" id="verdictText"></p>
+    </div>
+
+    <!-- Skills -->
+    <div class="skills-grid">
+      <div class="skills-col">
+        <h3>You have</h3>
+        <div class="chips" id="matchedChips"></div>
+      </div>
+      <div class="skills-col">
+        <h3>You're missing</h3>
+        <div class="chips" id="missingChips"></div>
+      </div>
+    </div>
+
+    <hr class="divider" />
+
+    <!-- Deep Analysis button -->
+    <button class="btn btn-secondary" id="deepBtn">
+      Deep Analysis
+      <span style="font-size:10px;font-weight:400;color:var(--muted);margin-left:4px;">(70B model)</span>
+    </button>
+
+    <!-- Deep Analysis results (hidden until triggered) -->
+    <div id="deepSection" style="display:none;">
+      <hr class="divider" />
+
+      <p class="section-title">Suggested rewrites</p>
+      <div id="rewritesList"></div>
+
+      <hr class="divider" />
+
+      <p class="section-title">ATS keywords to add</p>
+      <div class="chips" id="atsChips" style="margin-bottom:16px;"></div>
+
+      <p class="section-title">Detailed feedback</p>
+      <p class="feedback-para" id="feedbackPara"></p>
+    </div>
+
+    <p class="disclaimer" id="disclaimer">Powered by Groq · llama-3.1-8b-instant</p>
+  </div>
+
+  <!-- ── ERROR state ── -->
+  <div class="state body" id="state-error">
+    <div class="error-box" id="errorMsg"></div>
+    <button class="btn btn-primary" id="retryBtn">Try again</button>
+    <button class="btn btn-secondary" id="errorSetupBtn" style="display:none;">Open settings</button>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

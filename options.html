@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Resume Match — Setup</title>
+  <style>
+    :root {
+      --bg: #f9fafb;
+      --surface: #ffffff;
+      --border: #e5e7eb;
+      --text: #111827;
+      --muted: #6b7280;
+      --accent: #6366f1;
+      --accent-hover: #4f46e5;
+      --success: #10b981;
+      --danger: #ef4444;
+      --radius: 8px;
+      --shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.06);
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0f172a;
+        --surface: #1e293b;
+        --border: #334155;
+        --text: #f1f5f9;
+        --muted: #94a3b8;
+        --accent: #818cf8;
+        --accent-hover: #6366f1;
+      }
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      padding: 48px 16px;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 640px;
+    }
+
+    .header {
+      margin-bottom: 32px;
+    }
+
+    .header h1 {
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: -0.3px;
+    }
+
+    .header p {
+      margin-top: 6px;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 28px;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    label {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+      letter-spacing: 0.01em;
+    }
+
+    .field-hint {
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+
+    textarea, input[type="password"] {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      font-family: inherit;
+      font-size: 13px;
+      line-height: 1.6;
+      padding: 10px 12px;
+      resize: vertical;
+      transition: border-color 0.15s, box-shadow 0.15s;
+      outline: none;
+    }
+
+    textarea:focus, input[type="password"]:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent);
+    }
+
+    textarea {
+      min-height: 320px;
+      font-family: ui-monospace, "SF Mono", "Fira Code", monospace;
+      font-size: 12px;
+    }
+
+    .key-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .key-row input {
+      flex: 1;
+    }
+
+    .toggle-btn {
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 11px;
+      padding: 8px 10px;
+      white-space: nowrap;
+      transition: border-color 0.15s, color 0.15s;
+    }
+
+    .toggle-btn:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    .actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .btn-save {
+      background: var(--accent);
+      border: none;
+      border-radius: 6px;
+      color: #fff;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 14px;
+      font-weight: 600;
+      padding: 10px 24px;
+      transition: background 0.15s, transform 0.1s;
+    }
+
+    .btn-save:hover { background: var(--accent-hover); }
+    .btn-save:active { transform: scale(0.98); }
+
+    .confirm {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--success);
+      opacity: 0;
+      transition: opacity 0.3s;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .confirm.visible { opacity: 1; }
+
+    .divider {
+      border: none;
+      border-top: 1px solid var(--border);
+    }
+
+    .section-title {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>Resume Match Analyzer — Setup</h1>
+      <p>Paste your resume and Groq API key once. The extension will use them on every job page you visit.</p>
+    </div>
+
+    <div class="card">
+      <div class="field">
+        <span class="section-title">Resume</span>
+        <label for="resume">Resume text</label>
+        <span class="field-hint">Paste the plain-text version of your resume (copy from your PDF or Word doc).</span>
+        <textarea id="resume" placeholder="John Doe&#10;john@example.com · github.com/johndoe&#10;&#10;SKILLS&#10;Python, TypeScript, React, Node.js, AWS, Docker...&#10;&#10;EXPERIENCE&#10;..."></textarea>
+      </div>
+
+      <hr class="divider" />
+
+      <div class="field">
+        <span class="section-title">API Access</span>
+        <label for="apiKey">Groq API key</label>
+        <span class="field-hint">Get a free key at <strong>console.groq.com</strong>. It is stored locally and never sent anywhere except Groq.</span>
+        <div class="key-row">
+          <input type="password" id="apiKey" placeholder="gsk_..." autocomplete="off" spellcheck="false" />
+          <button class="toggle-btn" id="toggleKey">Show</button>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button class="btn-save" id="saveBtn">Save settings</button>
+        <span class="confirm" id="confirm">&#10003; Saved!</span>
+      </div>
+    </div>
+  </div>
+  <script src="options.js"></script>
+</body>
+</html>
