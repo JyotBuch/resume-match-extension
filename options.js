@@ -1,9 +1,12 @@
 (() => {
-  const resumeEl = document.getElementById('resume');
-  const apiKeyEl = document.getElementById('apiKey');
-  const saveBtn  = document.getElementById('saveBtn');
-  const confirm  = document.getElementById('confirm');
-  const toggleKey = document.getElementById('toggleKey');
+  const resumeEl    = document.getElementById('resume');
+  const apiKeyEl    = document.getElementById('apiKey');
+  const saveBtn     = document.getElementById('saveBtn');
+  const confirm     = document.getElementById('confirm');
+  const toggleKey   = document.getElementById('toggleKey');
+  const parseStatus = document.getElementById('parseStatus');
+  const parseLabel  = document.getElementById('parseLabel');
+  const parseSpinner = document.getElementById('parseSpinner');
 
   // Populate fields from storage on load
   chrome.storage.local.get(['resume', 'groqApiKey'], (data) => {
@@ -34,9 +37,32 @@
       return;
     }
 
-    chrome.storage.local.set({ resume, groqApiKey }, () => {
+    // Clear any previously parsed resume so stale data isn't used while parsing
+    chrome.storage.local.set({ resume, groqApiKey, parsedResume: null }, () => {
       confirm.classList.add('visible');
       setTimeout(() => confirm.classList.remove('visible'), 2500);
+
+      // Kick off resume parse in background
+      parseStatus.style.display = 'flex';
+      parseSpinner.style.display = 'inline-block';
+      parseLabel.textContent = 'Indexing resume structure…';
+      saveBtn.disabled = true;
+
+      chrome.runtime.sendMessage({ type: 'PARSE_RESUME' }, (response) => {
+        parseSpinner.style.display = 'none';
+        saveBtn.disabled = false;
+
+        if (response?.parsed?.experiences?.length > 0) {
+          const count = response.parsed.experiences.length;
+          parseLabel.textContent = `✓ Indexed ${count} experience${count > 1 ? 's' : ''}`;
+          parseLabel.style.color = 'var(--success)';
+        } else {
+          parseLabel.textContent = response?.error
+            ? `⚠ Index failed: ${response.error}`
+            : '⚠ Could not index experiences — analysis will still work';
+          parseLabel.style.color = 'var(--warning)';
+        }
+      });
     });
   });
 })();

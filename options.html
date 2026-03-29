@@ -229,6 +229,12 @@
         <button class="btn-save" id="saveBtn">Save settings</button>
         <span class="confirm" id="confirm">&#10003; Saved!</span>
       </div>
+
+      <div id="parseStatus" style="display:none; margin-top:12px; font-size:12px; color:var(--muted); display:flex; align-items:center; gap:8px;">
+        <span id="parseSpinner" style="display:inline-block; width:12px; height:12px; border:2px solid var(--border); border-top-color:var(--accent); border-radius:50%; animation:spin 0.8s linear infinite;"></span>
+        <span id="parseLabel">Indexing resume structure…</span>
+      </div>
+      <style>@keyframes spin { to { transform: rotate(360deg); } }</style>
     </div>
   </div>
   <script src="options.js"></script>

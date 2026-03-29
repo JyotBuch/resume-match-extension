@@ -4,11 +4,55 @@ const DEEP_MODEL    = 'llama-3.3-70b-versatile';
 
 const SYSTEM_PROMPT = 'You are a technical recruiter. Respond ONLY with valid JSON, no markdown, no explanation.';
 
-function buildFastPrompt(resume, jd) {
-  return `Analyze how well the resume matches the job description below.
+function buildParsePrompt(resume) {
+  return `Parse this resume into structured JSON. Be thorough and precise.
 
 RESUME:
 ${resume}
+
+Return ONLY this JSON object (no markdown fences, no extra text):
+{
+  "name": "<candidate full name, or empty string>",
+  "experiences": [
+    {
+      "id": <1-based integer>,
+      "title": "<job title>",
+      "company": "<company name>",
+      "period": "<date range e.g. Jan 2021 – Mar 2023>",
+      "bullets": ["<achievement or responsibility, no leading bullet symbols>"]
+    }
+  ],
+  "skills": ["<skill name>"],
+  "education": [
+    { "degree": "<degree and field>", "school": "<institution>", "year": "<graduation year>" }
+  ]
+}
+Order experiences most-recent-first. Strip all bullet symbols (•, -, *, –) from bullet text. Include every bullet listed under each role.`;
+}
+
+function formatResumeForPrompt(resume, parsed) {
+  if (!parsed) return resume;
+
+  const expLines = (parsed.experiences || []).map(e =>
+    `${e.title} @ ${e.company} (${e.period})\n${(e.bullets || []).map(b => `  • ${b}`).join('\n')}`
+  ).join('\n\n');
+
+  const skills = (parsed.skills || []).join(', ');
+  const edu = (parsed.education || []).map(e => `${e.degree}, ${e.school} (${e.year})`).join(' | ');
+
+  return [
+    parsed.name ? `Candidate: ${parsed.name}` : '',
+    skills       ? `Skills: ${skills}` : '',
+    edu          ? `Education: ${edu}` : '',
+    expLines     ? `\nExperience:\n${expLines}` : '',
+  ].filter(Boolean).join('\n');
+}
+
+function buildFastPrompt(resume, parsed, jd) {
+  return `Analyze how well the resume matches the job description below.
+
+RESUME:
+${formatResumeForPrompt(resume, parsed)}
 
 JOB DESCRIPTION:
 ${jd}
@@ -22,11 +66,11 @@ Return ONLY this JSON object (no markdown fences, no extra text):
 }`;
 }
 
-function buildDeepPrompt(resume, jd) {
+function buildDeepPrompt(resume, parsed, jd) {
   return `Perform a detailed resume-to-job-description analysis.
 
 RESUME:
-${resume}
+${formatResumeForPrompt(resume, parsed)}
 
 JOB DESCRIPTION:
 ${jd}
@@ -37,13 +81,18 @@ Return ONLY this JSON object (no markdown fences, no extra text):
   "matched_skills": [<up to 6 skills the resume clearly demonstrates>],
   "missing_skills": [<up to 6 skills the job requires that are absent from the resume>],
   "verdict": "<one punchy sentence summarising fit>",
-  "bullet_rewrites": [
-    { "original": "<existing resume bullet>", "improved": "<rewritten bullet tailored to this JD>" }
-  ],
   "keywords_to_add": [<ATS keywords from the JD missing from the resume, up to 10>],
-  "detailed_feedback": "<3-4 sentence paragraph with specific, actionable advice>"
+  "strength_tilts": [
+    {
+      "strength": "<3-6 word label for this strength>",
+      "evidence": "<specific role, project, or bullet from the resume that proves this strength exists>",
+      "tilt": "<concrete, specific advice on how to reframe or emphasise this strength for this exact role — what angle to take, what to foreground>",
+      "why": "<what in the JD makes this relevant — quote or paraphrase the specific requirement>"
+    }
+  ],
+  "detailed_feedback": "<3-4 sentence overall assessment — what is working, what the gap is, and the single most important thing to address>"
 }
-Include 2-3 bullet_rewrites. Choose bullets from the resume that are closest to the JD requirements.`;
+Include 2-4 strength_tilts. Only include a tilt where the resume genuinely demonstrates the strength AND the JD genuinely values it. Do not invent experience or suggest tilts that require fabricating background the candidate does not have.`;
 }
 
 /**
@@ -76,7 +125,7 @@ async function callGroq(apiKey, model, userPrompt) {
         { role: 'user',   content: userPrompt },
       ],
       temperature: 0.2,
-      max_tokens: 1024,
+      max_tokens: 1500,
     }),
   });
 
@@ -93,7 +142,6 @@ async function callGroq(apiKey, model, userPrompt) {
   const data = await response.json();
   const rawContent = data?.choices?.[0]?.message?.content;
   if (!rawContent) throw new Error('Empty response from Groq.');
-
   return safeParseJSON(rawContent);
 }
 
@@ -102,8 +150,8 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message.type === 'ANALYZE' || message.type === 'DEEP_ANALYZE') {
     const isDeep = message.type === 'DEEP_ANALYZE';
 
-    chrome.storage.local.get(['resume', 'groqApiKey'], async (data) => {
-      const { resume, groqApiKey } = data;
+    chrome.storage.local.get(['resume', 'groqApiKey', 'parsedResume'], async (data) => {
+      const { resume, groqApiKey, parsedResume } = data;
 
       if (!resume || !groqApiKey) {
         sendResponse({
@@ -120,11 +168,15 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       }
 
       try {
-        const model      = isDeep ? DEEP_MODEL : FAST_MODEL;
-        const prompt     = isDeep ? buildDeepPrompt(resume, jd) : buildFastPrompt(resume, jd);
-        const result     = await callGroq(groqApiKey, model, prompt);
-        result._model    = model;
-        result._isDeep   = isDeep;
+        const model  = isDeep ? DEEP_MODEL : FAST_MODEL;
+        const prompt = isDeep
+          ? buildDeepPrompt(resume, parsedResume, jd)
+          : buildFastPrompt(resume, parsedResume, jd);
+        const result  = await callGroq(groqApiKey, model, prompt);
+        result._model  = model;
+        result._isDeep = isDeep;
+        // Pass the parsed structure along so popup can use it directly
+        result._parsedResume = parsedResume || null;
         sendResponse({ result });
       } catch (err) {
         sendResponse({
@@ -134,7 +186,29 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       }
     });
 
-    // Return true to keep the message channel open for the async response
     return true;
   }
+
+  if (message.type === 'PARSE_RESUME') {
+    chrome.storage.local.get(['resume', 'groqApiKey'], async (data) => {
+      const { resume, groqApiKey } = data;
+
+      if (!resume || !groqApiKey) {
+        sendResponse({ error: 'Resume or API key missing.' });
+        return;
+      }
+
+      try {
+        const prompt = buildParsePrompt(resume.slice(0, 8000)); // guard token limit
+        const parsed = await callGroq(groqApiKey, FAST_MODEL, prompt);
+        chrome.storage.local.set({ parsedResume: parsed });
+        sendResponse({ parsed });
+      } catch (err) {
+        sendResponse({ error: err.message || 'Parse failed.' });
+      }
+    });
+
+    return true;
+  }
+
 });

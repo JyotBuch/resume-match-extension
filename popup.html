@@ -294,6 +294,47 @@
       color: var(--text);
     }
 
+    /* ── Strength tilt cards ─────────────────────────────── */
+    .tilt-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 10px;
+    }
+
+    .tilt-strength {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 10px;
+    }
+
+    .tilt-row {
+      margin-bottom: 8px;
+    }
+    .tilt-row:last-child { margin-bottom: 0; }
+
+    .tilt-label {
+      display: block;
+      font-size: 9px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 3px;
+      color: var(--muted);
+    }
+    .tilt-label-why   { color: var(--muted); }
+    .tilt-label-tilt  { color: var(--accent); }
+
+    .tilt-text {
+      font-size: 12px;
+      line-height: 1.55;
+      margin: 0;
+    }
+
+    .tilt-evidence { color: var(--text); }
+
     /* ── Disclaimer ──────────────────────────────────────── */
     .disclaimer {
       text-align: center;
@@ -401,15 +442,15 @@
     <div id="deepSection" style="display:none;">
       <hr class="divider" />
 
-      <p class="section-title">Suggested rewrites</p>
-      <div id="rewritesList"></div>
+      <p class="section-title">How to tilt your strengths</p>
+      <div id="tiltsList"></div>
 
       <hr class="divider" />
 
       <p class="section-title">ATS keywords to add</p>
       <div class="chips" id="atsChips" style="margin-bottom:16px;"></div>
 
-      <p class="section-title">Detailed feedback</p>
+      <p class="section-title">Overall feedback</p>
       <p class="feedback-para" id="feedbackPara"></p>
     </div>
 
