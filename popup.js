@@ -25,12 +25,14 @@
   const verdictText  = document.getElementById('verdictText');
   const matchedChips = document.getElementById('matchedChips');
   const missingChips = document.getElementById('missingChips');
-  const deepSection  = document.getElementById('deepSection');
-  const tiltsList    = document.getElementById('tiltsList');
-  const atsChips     = document.getElementById('atsChips');
-  const feedbackPara = document.getElementById('feedbackPara');
-  const disclaimer   = document.getElementById('disclaimer');
-  const errorMsg     = document.getElementById('errorMsg');
+  const deepSection    = document.getElementById('deepSection');
+  const tiltsList      = document.getElementById('tiltsList');
+  const atsChips       = document.getElementById('atsChips');
+  const feedbackPara   = document.getElementById('feedbackPara');
+  const sourcesSection = document.getElementById('sourcesSection');
+  const sourcesList    = document.getElementById('sourcesList');
+  const disclaimer     = document.getElementById('disclaimer');
+  const errorMsg       = document.getElementById('errorMsg');
 
   // ── Helpers ────────────────────────────────────────────────────────────────
   function showState(name) {
@@ -117,9 +119,27 @@
     // Overall feedback
     feedbackPara.textContent = result.detailed_feedback || '';
 
+    // Sources (only when web-enriched)
+    sourcesList.innerHTML = '';
+    if (result._sources?.length > 0) {
+      result._sources.forEach((src, i) => {
+        const row = document.createElement('div');
+        row.className = 'source-item';
+        row.innerHTML = `
+          <span class="source-num">${i + 1}</span>
+          <a class="source-link" href="${escHtml(src.url)}" target="_blank" rel="noopener" title="${escHtml(src.title)}">${escHtml(src.title)}</a>
+        `;
+        sourcesList.appendChild(row);
+      });
+      sourcesSection.style.display = 'block';
+    } else {
+      sourcesSection.style.display = 'none';
+    }
+
     deepSection.style.display = 'block';
     deepBtn.style.display = 'none';
-    disclaimer.textContent = `Powered by Groq · ${result._model || 'llama-3.3-70b-versatile'}`;
+    const webTag = result._webEnriched ? ' · Web-enriched' : '';
+    disclaimer.textContent = `Powered by Groq · ${result._model || 'llama-3.3-70b-versatile'}${webTag}`;
   }
 
   // ── Show error ─────────────────────────────────────────────────────────────
@@ -180,8 +200,14 @@
   function triggerDeepAnalysis() {
     if (!currentJD || deepPending) return;
     deepPending = true;
-    loadingLabel.textContent = 'Running deep analysis…';
     showState('loading');
+
+    // Tell the user whether web search will run
+    chrome.storage.local.get(['tavilyApiKey'], (d) => {
+      loadingLabel.textContent = d.tavilyApiKey
+        ? 'Searching web + analyzing…'
+        : 'Running deep analysis…';
+    });
 
     chrome.runtime.sendMessage(
       { type: 'DEEP_ANALYZE', jobDescription: currentJD },

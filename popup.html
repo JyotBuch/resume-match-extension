@@ -335,6 +335,48 @@
 
     .tilt-evidence { color: var(--text); }
 
+    /* ── Sources ─────────────────────────────────────────── */
+    .source-item {
+      display: flex;
+      align-items: baseline;
+      gap: 6px;
+      margin-bottom: 5px;
+    }
+
+    .source-num {
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--muted);
+      flex-shrink: 0;
+      width: 14px;
+    }
+
+    .source-link {
+      font-size: 11px;
+      color: var(--accent);
+      text-decoration: none;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 280px;
+      display: block;
+    }
+    .source-link:hover { text-decoration: underline; }
+
+    .web-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--success);
+      background: color-mix(in srgb, var(--success) 12%, transparent);
+      border-radius: 99px;
+      padding: 2px 7px;
+      margin-left: 6px;
+      vertical-align: middle;
+    }
+
     /* ── Disclaimer ──────────────────────────────────────── */
     .disclaimer {
       text-align: center;
@@ -452,6 +494,12 @@
 
       <p class="section-title">Overall feedback</p>
       <p class="feedback-para" id="feedbackPara"></p>
+
+      <div id="sourcesSection" style="display:none;">
+        <hr class="divider" />
+        <p class="section-title">Sources <span class="web-badge">&#127760; Web</span></p>
+        <div id="sourcesList"></div>
+      </div>
     </div>
 
     <p class="disclaimer" id="disclaimer">Powered by Groq · llama-3.1-8b-instant</p>

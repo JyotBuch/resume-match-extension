@@ -225,6 +225,15 @@
         </div>
       </div>
 
+      <div class="field">
+        <label for="tavilyKey">Tavily API key <span style="font-weight:400;color:var(--muted)">(optional — enables web-grounded analysis)</span></label>
+        <span class="field-hint">Free tier at <strong>app.tavily.com</strong> includes 1 000 searches/month. Deep Analysis will search job blogs, forums, and industry sources to ground its suggestions.</span>
+        <div class="key-row">
+          <input type="password" id="tavilyKey" placeholder="tvly-..." autocomplete="off" spellcheck="false" />
+          <button class="toggle-btn" id="toggleTavily">Show</button>
+        </div>
+      </div>
+
       <div class="actions">
         <button class="btn-save" id="saveBtn">Save settings</button>
         <span class="confirm" id="confirm">&#10003; Saved!</span>

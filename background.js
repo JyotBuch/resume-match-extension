@@ -66,14 +66,20 @@ Return ONLY this JSON object (no markdown fences, no extra text):
 }`;
 }
 
-function buildDeepPrompt(resume, parsed, jd) {
+function buildDeepPrompt(resume, parsed, jd, webContext) {
+  const webSection = webContext ? `
+
+REAL-WORLD CONTEXT (sourced from job blogs, forums, and industry sources — use this to ground your analysis in what the role actually requires day-to-day, not just what the JD says):
+${webContext}
+` : '';
+
   return `Perform a detailed resume-to-job-description analysis.
 
 RESUME:
 ${formatResumeForPrompt(resume, parsed)}
 
 JOB DESCRIPTION:
-${jd}
+${jd}${webSection}
 
 Return ONLY this JSON object (no markdown fences, no extra text):
 {
@@ -86,13 +92,74 @@ Return ONLY this JSON object (no markdown fences, no extra text):
     {
       "strength": "<3-6 word label for this strength>",
       "evidence": "<specific role, project, or bullet from the resume that proves this strength exists>",
-      "tilt": "<concrete, specific advice on how to reframe or emphasise this strength for this exact role — what angle to take, what to foreground>",
-      "why": "<what in the JD makes this relevant — quote or paraphrase the specific requirement>"
+      "tilt": "<concrete, specific advice on how to reframe or emphasise this strength for this exact role — what angle to take, what to foreground${webContext ? '. Reference real-world context where relevant' : ''}>",
+      "why": "<what in the JD${webContext ? ' and real-world context' : ''} makes this relevant>"
     }
   ],
-  "detailed_feedback": "<3-4 sentence overall assessment — what is working, what the gap is, and the single most important thing to address>"
+  "detailed_feedback": "<3-4 sentence overall assessment — what is working, what the gap is, and the single most important thing to address${webContext ? '. Ground observations in the real-world context where it adds signal' : ''}>"
 }
 Include 2-4 strength_tilts. Only include a tilt where the resume genuinely demonstrates the strength AND the JD genuinely values it. Do not invent experience or suggest tilts that require fabricating background the candidate does not have.`;
+}
+
+// ── Tavily web search ──────────────────────────────────────────────────────
+
+function buildSearchQueries(jd) {
+  // Extract first meaningful line as a proxy for job title
+  const title = jd.split('\n')
+    .map(l => l.trim())
+    .find(l => l.length > 3 && l.length < 80) || 'this role';
+
+  return [
+    `${title} real day to day responsibilities what it actually takes 2024`,
+    `${title} honest requirements skills hiring managers look for beyond job posting`,
+  ];
+}
+
+async function tavilySearch(apiKey, query) {
+  const response = await fetch('https://api.tavily.com/search', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      api_key: apiKey,
+      query,
+      max_results: 3,
+      search_depth: 'basic',
+      include_answer: false,
+    }),
+  });
+
+  if (!response.ok) return [];
+  const data = await response.json();
+  return data.results || [];
+}
+
+async function fetchWebContext(tavilyApiKey, jd) {
+  const queries  = buildSearchQueries(jd);
+  const searches = await Promise.allSettled(queries.map(q => tavilySearch(tavilyApiKey, q)));
+
+  // Flatten results, deduplicate by URL, keep top 5
+  const seen    = new Set();
+  const results = [];
+  for (const s of searches) {
+    if (s.status !== 'fulfilled') continue;
+    for (const r of s.value) {
+      if (seen.has(r.url)) continue;
+      seen.add(r.url);
+      results.push(r);
+      if (results.length >= 5) break;
+    }
+    if (results.length >= 5) break;
+  }
+
+  if (!results.length) return { context: null, sources: [] };
+
+  // Format for prompt — cap each result to 400 chars to keep tokens in check
+  const context = results.map((r, i) =>
+    `[${i + 1}] ${r.title}\n${r.content.slice(0, 400).trim()}`
+  ).join('\n\n');
+
+  const sources = results.map(r => ({ title: r.title, url: r.url }));
+  return { context, sources };
 }
 
 /**
@@ -150,8 +217,8 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message.type === 'ANALYZE' || message.type === 'DEEP_ANALYZE') {
     const isDeep = message.type === 'DEEP_ANALYZE';
 
-    chrome.storage.local.get(['resume', 'groqApiKey', 'parsedResume'], async (data) => {
-      const { resume, groqApiKey, parsedResume } = data;
+    chrome.storage.local.get(['resume', 'groqApiKey', 'parsedResume', 'tavilyApiKey'], async (data) => {
+      const { resume, groqApiKey, parsedResume, tavilyApiKey } = data;
 
       if (!resume || !groqApiKey) {
         sendResponse({
@@ -168,15 +235,26 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       }
 
       try {
+        let webContext = null;
+        let sources    = [];
+
+        // Fetch web context in parallel with nothing (prep only) — only for deep
+        if (isDeep && tavilyApiKey) {
+          const web = await fetchWebContext(tavilyApiKey, jd);
+          webContext = web.context;
+          sources    = web.sources;
+        }
+
         const model  = isDeep ? DEEP_MODEL : FAST_MODEL;
         const prompt = isDeep
-          ? buildDeepPrompt(resume, parsedResume, jd)
+          ? buildDeepPrompt(resume, parsedResume, jd, webContext)
           : buildFastPrompt(resume, parsedResume, jd);
         const result  = await callGroq(groqApiKey, model, prompt);
-        result._model  = model;
-        result._isDeep = isDeep;
-        // Pass the parsed structure along so popup can use it directly
+        result._model       = model;
+        result._isDeep      = isDeep;
         result._parsedResume = parsedResume || null;
+        result._sources     = sources;
+        result._webEnriched = sources.length > 0;
         sendResponse({ result });
       } catch (err) {
         sendResponse({
