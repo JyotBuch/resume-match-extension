@@ -103,16 +103,62 @@ Include 2-4 strength_tilts. Only include a tilt where the resume genuinely demon
 
 // ── Tavily web search ──────────────────────────────────────────────────────
 
-function buildSearchQueries(jd) {
-  // Extract first meaningful line as a proxy for job title
-  const title = jd.split('\n')
-    .map(l => l.trim())
-    .find(l => l.length > 3 && l.length < 80) || 'this role';
+async function extractJobContext(groqApiKey, jd) {
+  const prompt = `Extract structured info from this job description.
 
-  return [
-    `${title} real day to day responsibilities what it actually takes 2024`,
-    `${title} honest requirements skills hiring managers look for beyond job posting`,
-  ];
+JOB DESCRIPTION:
+${jd.slice(0, 3000)}
+
+Return ONLY this JSON (no markdown, no extra text):
+{
+  "jobTitle": "<exact job title>",
+  "company": "<company name, or empty string if not mentioned>",
+  "seniority": "<one of: junior, mid, senior, staff, principal, lead, manager, or empty>",
+  "techStack": ["<up to 4 most specific technologies or tools mentioned>"],
+  "domain": "<industry or domain e.g. fintech, developer tools, healthcare, e-commerce>"
+}`;
+
+  try {
+    return await callGroq(groqApiKey, FAST_MODEL, prompt);
+  } catch (_) {
+    return null; // non-fatal — fall back to heuristic queries
+  }
+}
+
+function buildSearchQueries(ctx) {
+  // ctx: { jobTitle, company, seniority, techStack, domain } — may be null
+  if (!ctx || !ctx.jobTitle) {
+    return [
+      'software engineer real day to day responsibilities reddit blind',
+      'what hiring managers actually look for beyond job description',
+    ];
+  }
+
+  const { jobTitle, company, seniority, techStack = [], domain } = ctx;
+  const level = seniority ? `${seniority} ` : '';
+  const stack = techStack.slice(0, 2).join(' ');
+  const queries = [];
+
+  // Query 1: real day-to-day grounded in the exact role + domain
+  queries.push(
+    `"${level}${jobTitle}" real day to day work ${domain || ''} reddit blind honest`.trim()
+  );
+
+  // Query 2: company-specific if we have one, otherwise stack/domain specific
+  if (company) {
+    queries.push(`${company} ${jobTitle} engineering culture what they actually look for`);
+  } else {
+    queries.push(
+      `${level}${jobTitle} ${stack} what hiring managers actually need beyond job posting`.trim()
+    );
+  }
+
+  // Query 3: only if specific tech stack — look for real production usage discussion
+  if (techStack.length >= 2) {
+    queries.push(`${jobTitle} ${stack} production real requirements day to day`);
+  }
+
+  return queries;
 }
 
 async function tavilySearch(apiKey, query) {
@@ -133,8 +179,9 @@ async function tavilySearch(apiKey, query) {
   return data.results || [];
 }
 
-async function fetchWebContext(tavilyApiKey, jd) {
-  const queries  = buildSearchQueries(jd);
+async function fetchWebContext(tavilyApiKey, groqApiKey, jd) {
+  const jobCtx  = await extractJobContext(groqApiKey, jd);
+  const queries  = buildSearchQueries(jobCtx);
   const searches = await Promise.allSettled(queries.map(q => tavilySearch(tavilyApiKey, q)));
 
   // Flatten results, deduplicate by URL, keep top 5
@@ -240,7 +287,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
         // Fetch web context in parallel with nothing (prep only) — only for deep
         if (isDeep && tavilyApiKey) {
-          const web = await fetchWebContext(tavilyApiKey, jd);
+          const web = await fetchWebContext(tavilyApiKey, groqApiKey, jd);
           webContext = web.context;
           sources    = web.sources;
         }
